@@ -1,94 +1,68 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 import matplotlib.pyplot as plt
-from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
-# Título
-st.title("Pronóstico COVID-19 - Laboratorio 3.2")
+# Cargar los datos
+df = pd.read_csv("tus_datos.csv")
 
-# Cargar dataset
-df = pd.read_csv("acti_data.csv")  # Asegúrate que tenga columnas: Country_Region, Date, Confirmed, Deaths
+# Convertir fechas
+df["Last_Update"] = pd.to_datetime(df["Last_Update"])
 
-# Lista de países únicos
-paises = df['Country_Region'].unique()
-pais_seleccionado = st.selectbox("Seleccione un país:", paises)
+# Selección de país
+paises = df["Country_Region"].unique()
+pais_seleccionado = st.selectbox("Selecciona un país:", sorted(paises))
 
-# Filtrar por país y ordenar fechas
-data_pais = df[df['Country_Region'] == pais_seleccionado].copy()
-data_pais['Date'] = pd.to_datetime(data_pais['Date'])
-data_pais = data_pais.sort_values('Date')
+# Filtrar datos del país
+data_pais = df[df["Country_Region"] == pais_seleccionado].copy()
+data_pais = data_pais.groupby("Last_Update")[["Confirmed", "Deaths"]].sum().reset_index()
 
-# Función para entrenar modelo y predecir
-def pronosticar(serie, variable, pasos=14):
-    try:
-        modelo = SARIMAX(
-            serie,
-            order=(1,1,1),
-            seasonal_order=(1,1,1,7),
-            enforce_stationarity=False,
-            enforce_invertibility=False
-        )
-        resultado = modelo.fit(disp=False)
-        forecast = resultado.get_forecast(steps=pasos)
-        pred = forecast.predicted_mean
-        modelo_usado = "SARIMA"
-    except Exception as e:
-        st.warning(f"SARIMA falló para {variable}: {e}\nUsando modelo ETS como alternativa.")
-        modelo_ets = ExponentialSmoothing(serie, seasonal='add', seasonal_periods=7)
-        resultado = modelo_ets.fit()
-        pred = resultado.forecast(pasos)
-        modelo_usado = "ETS"
-    return pred, modelo_usado
-
-# ========================
-# Pronóstico de Confirmados
-# ========================
-st.subheader(f"Serie histórica de casos confirmados en {pais_seleccionado}")
+# --- Serie histórica ---
+st.subheader(f"Serie histórica de casos en {pais_seleccionado}")
 fig, ax = plt.subplots()
-ax.plot(data_pais['Date'], data_pais['Confirmed'], label="Confirmados")
+ax.plot(data_pais["Last_Update"], data_pais["Confirmed"], label="Confirmados")
+ax.plot(data_pais["Last_Update"], data_pais["Deaths"], label="Muertes")
 ax.set_xlabel("Fecha")
 ax.set_ylabel("Casos")
 ax.legend()
 plt.xticks(rotation=45)
 st.pyplot(fig)
 
-pred_confirmados, modelo_c = pronosticar(data_pais['Confirmed'], "Confirmados")
-fechas_futuras = pd.date_range(start=data_pais['Date'].iloc[-1] + pd.Timedelta(days=1), periods=14)
+# --- Pronóstico con ETS ---
+st.subheader("Pronóstico a 14 días (ETS)")
 
-st.subheader(f"Pronóstico de casos confirmados a 14 días ({modelo_c})")
-fig2, ax2 = plt.subplots()
-ax2.plot(data_pais['Date'], data_pais['Confirmed'], label="Histórico")
-ax2.plot(fechas_futuras, pred_confirmados, label="Pronóstico", color="red")
-ax2.set_xlabel("Fecha")
-ax2.set_ylabel("Casos confirmados")
-ax2.legend()
-plt.xticks(rotation=45)
-st.pyplot(fig2)
+for columna in ["Confirmed", "Deaths"]:
+    serie = data_pais.set_index("Last_Update")[columna]
 
-# ========================
-# Pronóstico de Muertes
-# ========================
-if 'Deaths' in data_pais.columns:
-    st.subheader(f"Serie histórica de muertes en {pais_seleccionado}")
-    fig3, ax3 = plt.subplots()
-    ax3.plot(data_pais['Date'], data_pais['Deaths'], label="Muertes", color="orange")
-    ax3.set_xlabel("Fecha")
-    ax3.set_ylabel("Muertes")
-    ax3.legend()
+    # Modelo ETS
+    modelo = ExponentialSmoothing(serie, trend="add", seasonal=None).fit()
+    pronostico = modelo.forecast(14)
+
+    fig, ax = plt.subplots()
+    ax.plot(serie.index, serie, label="Histórico")
+    ax.plot(pronostico.index, pronostico, label="Pronóstico", linestyle="--")
+    ax.set_title(f"{columna} - {pais_seleccionado}")
+    ax.legend()
     plt.xticks(rotation=45)
-    st.pyplot(fig3)
+    st.pyplot(fig)
 
-    pred_muertes, modelo_m = pronosticar(data_pais['Deaths'], "Muertes")
-    
-    st.subheader(f"Pronóstico de muertes a 14 días ({modelo_m})")
-    fig4, ax4 = plt.subplots()
-    ax4.plot(data_pais['Date'], data_pais['Deaths'], label="Histórico", color="orange")
-    ax4.plot(fechas_futuras, pred_muertes, label="Pronóstico", color="red")
-    ax4.set_xlabel("Fecha")
-    ax4.set_ylabel("Muertes")
-    ax4.legend()
+# --- Pronóstico con SARIMA ---
+st.subheader("Pronóstico a 14 días (SARIMA)")
+
+for columna in ["Confirmed", "Deaths"]:
+    serie = data_pais.set_index("Last_Update")[columna]
+
+    # Modelo SARIMA
+    modelo = SARIMAX(serie, order=(1,1,1), seasonal_order=(1,1,1,7)).fit(disp=False)
+    pronostico = modelo.get_forecast(steps=14).predicted_mean
+
+    fig, ax = plt.subplots()
+    ax.plot(serie.index, serie, label="Histórico")
+    ax.plot(pronostico.index, pronostico, label="Pronóstico", linestyle="--")
+    ax.set_title(f"{columna} - {pais_seleccionado}")
+    ax.legend()
     plt.xticks(rotation=45)
-    st.pyplot(fig4)
+    st.pyplot(fig)
 
 
