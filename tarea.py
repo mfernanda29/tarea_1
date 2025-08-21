@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -6,69 +5,75 @@ import matplotlib.pyplot as plt
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-# Título
-st.title("Pronóstico COVID-19 - Laboratorio 3.2")
+# ===== Título de la app =====
+st.title("Pronóstico COVID-19 - Casos y Muertes (14 días)")
 
-# Cargar dataset
-df = pd.read_csv("acti_data.csv")  # tu archivo CSV
+# ===== Cargar dataset =====
+df = pd.read_csv("acti_data.csv")  # Ajusta el nombre de tu CSV
 
-# Lista de países únicos
+# ===== Selección de país =====
 paises = df['Country_Region'].unique()
 pais_seleccionado = st.selectbox("Seleccione un país:", paises)
 
-# Filtrar por país
-data_pais = df[df['Country_Region'] == pais_seleccionado].copy()
+# ===== Filtrar datos por país =====
+data_pais = df[df['Country_Region'] == pais_seleccionado]
 
-# Ordenar por fecha
+# ===== Convertir columna 'Date' a datetime y ordenar =====
 if 'Date' in data_pais.columns:
     data_pais['Date'] = pd.to_datetime(data_pais['Date'])
     data_pais = data_pais.sort_values('Date')
 
-# Serie temporal de Confirmados
-serie = data_pais.set_index("Date")["Confirmed"]
-
-st.subheader(f"Serie histórica de casos confirmados en {pais_seleccionado}")
-fig, ax = plt.subplots()
-ax.plot(serie, label="Confirmados")
-ax.set_xlabel("Fecha")
-ax.set_ylabel("Casos")
-ax.legend()
-st.pyplot(fig)
-
-# Intentar modelo SARIMA
-try:
-    modelo = SARIMAX(
-        serie,
-        order=(1, 1, 1),
-        seasonal_order=(1, 1, 1, 7),
-        enforce_stationarity=False,
-        enforce_invertibility=False
-    )
-    resultado = modelo.fit(disp=False)
-    forecast = resultado.get_forecast(steps=14)
-    pred = forecast.predicted_mean
-    modelo_usado = "SARIMA"
-except Exception as e:
-    st.warning(f"SARIMA falló: {e}\nUsando modelo ETS como alternativa.")
+# ===== Función para modelar y proyectar =====
+def pronostico_serie(serie, tipo="Casos"):
+    st.subheader(f"Serie histórica de {tipo} en {pais_seleccionado}")
+    
+    # Gráfico histórico
+    fig, ax = plt.subplots()
+    ax.plot(serie, label=f"{tipo} históricos", color="blue")
+    ax.set_xlabel("Días")
+    ax.set_ylabel(tipo)
+    ax.legend()
+    st.pyplot(fig)
+    
+    # Intentar SARIMA primero
     try:
+        modelo = SARIMAX(
+            serie,
+            order=(1,1,1),
+            seasonal_order=(1,1,1,7),
+            enforce_stationarity=False,
+            enforce_invertibility=False
+        )
+        resultado = modelo.fit(disp=False)
+        forecast = resultado.get_forecast(steps=14)
+        pred = forecast.predicted_mean
+        modelo_usado = "SARIMA"
+    except:
+        # Alternativa ETS
         modelo_ets = ExponentialSmoothing(serie, seasonal='add', seasonal_periods=7)
         resultado = modelo_ets.fit()
         pred = resultado.forecast(14)
         modelo_usado = "ETS"
-    except Exception as e2:
-        st.error(f"ETS también falló: {e2}")
-        pred = None
-        modelo_usado = "Ninguno"
-
-# Mostrar pronóstico
-if pred is not None:
-    st.subheader(f"Pronóstico a 14 días para {pais_seleccionado} ({modelo_usado})")
+    
+    # Gráfico histórico + pronóstico
+    st.subheader(f"Pronóstico a 14 días de {tipo} ({modelo_usado})")
     fig2, ax2 = plt.subplots()
-    ax2.plot(serie.index, serie, label="Histórico")
-    ax2.plot(pd.date_range(serie.index[-1] + pd.Timedelta(days=1), periods=14), pred, 
-             label="Pronóstico", color="red")
-    ax2.set_xlabel("Fecha")
-    ax2.set_ylabel("Casos")
+    ax2.plot(range(len(serie)), serie, label=f"{tipo} históricos", color="blue")
+    ax2.plot(range(len(serie), len(serie)+14), pred, label="Pronóstico", color="red", linestyle="--")
+    ax2.set_xlabel("Días")
+    ax2.set_ylabel(tipo)
     ax2.legend()
     st.pyplot(fig2)
+
+# ===== Serie de Casos =====
+serie_casos = data_pais['Confirmed'].reset_index(drop=True)
+pronostico_serie(serie_casos, tipo="Casos")
+
+# ===== Serie de Muertes =====
+if 'Deaths' in data_pais.columns:
+    serie_muertes = data_pais['Deaths'].reset_index(drop=True)
+    pronostico_serie(serie_muertes, tipo="Muertes")
+else:
+    st.warning("El dataset no contiene columna 'Deaths'. No se puede proyectar muertes.")
+
 
