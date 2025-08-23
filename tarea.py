@@ -4,10 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
-
-# =========================
-# Métricas (sin scikit-learn)
-# =========================
 def mae(y_true, y_pred):
     y_true = np.array(y_true, dtype=float)
     y_pred = np.array(y_pred, dtype=float)
@@ -20,9 +16,6 @@ def mape(y_true, y_pred):
     denom = np.where(y_true == 0, 1.0, y_true)
     return np.mean(np.abs((y_true - y_pred) / denom)) * 100
 
-# =========================
-# Simulación de histórico
-# =========================
 def simulate_history(last_value, days=60, daily_growth=0.03, noise=0.0, last_date=pd.Timestamp("2022-04-18")):
     """
     Genera una serie acumulada "creíble" hacia atrás desde un valor final (last_value).
@@ -55,18 +48,10 @@ def simulate_history(last_value, days=60, daily_growth=0.03, noise=0.0, last_dat
     start_date = pd.to_datetime(last_date) - pd.Timedelta(days=days - 1)
     dates = pd.date_range(start=start_date, periods=days, freq="D")
     return pd.Series(values, index=dates)
-
-# =========================
-# App
-# =========================
 st.title("Modelado y Proyección COVID-19")
 st.caption("⚠️ Solo se dispone del reporte diario del 18/04/2022. "
            "Para poder entrenar un modelo de series temporales, se simula un histórico a partir de ese dato final. "
            "Resultados con fines didácticos.")
-
-# -------------------------
-# 1) Cargar CSV de un solo día
-# -------------------------
 DATA_PATH = "acti_data.csv"   # Debe estar en el repo
 try:
     raw = pd.read_csv(DATA_PATH)
