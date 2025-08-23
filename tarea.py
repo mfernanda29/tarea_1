@@ -95,7 +95,7 @@ st.line_chart(hist_df)
 # -------------------------
 # 3.1 Modelado y Proyección (ETS)
 # -------------------------
-st.markdown("### **3.1 Implementación del modelo ETS para pronóstico**")
+st.markdown("### **3.2 Implementación del modelo ETS para pronóstico**")
 target = st.selectbox("Variable a pronosticar", ["Confirmed", "Deaths"])
 series = hist_df[target]
 
@@ -118,7 +118,7 @@ except Exception as e:
 # -------------------------
 # 3.2 Validación del modelo (Backtesting con MAE/MAPE)
 # -------------------------
-st.markdown("### **3.2 Validación con Backtesting (MAE / MAPE)**")
+st.markdown("### **3.3 Validación con Backtesting (MAE / MAPE)**")
 mae_val = mae(test.values, preds.values)
 mape_val = mape(test.values, preds.values)
 
